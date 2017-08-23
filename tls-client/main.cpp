@@ -35,7 +35,12 @@
 #include "mbed.h"
 #include "NetworkStack.h"
 
+#if TARGET_REALTEK_RTL8195AM
+#include "RTWInterface.h"
+#else
 #include "EthernetInterface.h"
+#endif
+
 #include "TCPSocket.h"
 
 #include "mbedtls/platform.h"
@@ -223,13 +228,13 @@ public:
         }
 
         /* Fill the request buffer */
-        _bpos = snprintf(_buffer, sizeof(_buffer) - 1, 
+        _bpos = snprintf(_buffer, sizeof(_buffer) - 1,
                          "GET %s HTTP/1.1\nHost: %s\n\n", path, HTTPS_SERVER_NAME);
 
         int offset = 0;
         do {
-            ret = mbedtls_ssl_write(&_ssl, 
-                                    (const unsigned char *) _buffer + offset, 
+            ret = mbedtls_ssl_write(&_ssl,
+                                    (const unsigned char *) _buffer + offset,
                                     _bpos - offset);
             if (ret > 0)
               offset += ret;
@@ -419,17 +424,23 @@ int main() {
      * cause the other party to time out. */
 
     /* Inititalise with DHCP, connect, and start up the stack */
-    EthernetInterface eth_iface;
-    eth_iface.connect();
+#if TARGET_REALTEK_RTL8195AM
+    RTWInterface netface;
+    netface.connect(MBED_CONF_APP_WIFI_SSID, MBED_CONF_APP_WIFI_PASSWORD, NSAPI_SECURITY_WPA_WPA2);
+#else
+    EthernetInterface netface;
+    netface.connect();
+#endif
+
     mbedtls_printf("Using Ethernet LWIP\r\n");
-    const char *ip_addr = eth_iface.get_ip_address();
+    const char *ip_addr = netface.get_ip_address();
     if (ip_addr) {
         mbedtls_printf("Client IP Address is %s\r\n", ip_addr);
     } else {
         mbedtls_printf("No Client IP Address\r\n");
     }
 
-    HelloHTTPS *hello = new HelloHTTPS(HTTPS_SERVER_NAME, HTTPS_SERVER_PORT, &eth_iface);
+    HelloHTTPS *hello = new HelloHTTPS(HTTPS_SERVER_NAME, HTTPS_SERVER_PORT, &netface);
     hello->startTest(HTTPS_PATH);
     delete hello;
 }
